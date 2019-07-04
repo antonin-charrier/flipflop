@@ -4,6 +4,8 @@
           package="com.ourakoz.flipflop">
 
     <dist:module dist:instant="true"/>
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.NFC" />
     <uses-feature android:name="android.hardware.nfc" android:required="true" />
     <application

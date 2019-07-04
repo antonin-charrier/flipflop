@@ -1,34 +1,43 @@
 package com.ourakoz.flipflop
 
+import android.Manifest
+import android.annotation.SuppressLint
+import android.app.AlertDialog
 import android.app.PendingIntent
 import android.content.Intent
-import android.nfc.NdefMessage
-import android.nfc.NdefRecord
+import android.content.pm.PackageManager
+import android.net.Uri
 import android.nfc.NfcAdapter
 import android.nfc.Tag
-import android.nfc.tech.Ndef
-import android.nfc.tech.NdefFormatable
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.room.*
 import kotlinx.android.synthetic.main.activity_main.*
 import kotlinx.android.synthetic.main.content_main.*
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.launch
-import java.io.ByteArrayOutputStream
-import java.util.*
+import kotlinx.android.synthetic.main.dialog_phone.view.*
+import kotlinx.android.synthetic.main.dialog_phone.view.et_name
+import kotlinx.android.synthetic.main.dialog_sms.view.*
+import kotlinx.android.synthetic.main.dialog_type.view.*
+import kotlinx.android.synthetic.main.dialog_url.view.*
+import kotlinx.coroutines.*
 
 
+@ExperimentalCoroutinesApi
 class MainActivity : AppCompatActivity(), CoroutineScope by MainScope() {
 
+    private val PHONE_COMMAND_CALL_PHONE_PERMISSION = 23764
+    private val SMS_COMMAND_SMS_PERMISSION = 18634
     private var nfcAdapter : NfcAdapter? = null
     private var nfcPendingIntent: PendingIntent? = null
     lateinit var db: FlipflopDatabase
     lateinit var commands: List<Command>
+    private var currentPhoneNumber = ""
+    private var currentMessage = ""
+    private var currentUrl = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -80,19 +89,129 @@ class MainActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         if (intentToProcess.action == NfcAdapter.ACTION_NDEF_DISCOVERED || intentToProcess.action == NfcAdapter.ACTION_TAG_DISCOVERED){
             launch(Dispatchers.IO) {
                 val id = intentToProcess.getParcelableExtra<Tag>(NfcAdapter.EXTRA_TAG).id.toHexString()
-                if (db.commandDao().findByNfcId(id) != null) {
+                val command = db.commandDao().findByNfcId(id)
+                if (command != null) {
                     runOnUiThread {
-                        Toast.makeText(applicationContext, "Appel de Titi en cours", Toast.LENGTH_LONG).show()
+                        when (command.type) {
+                            CommandType.PHONE.toString() -> {
+                                currentPhoneNumber = command.phoneNumber
+                                if (ContextCompat.checkSelfPermission(this@MainActivity,
+                                        Manifest.permission.CALL_PHONE)
+                                    != PackageManager.PERMISSION_GRANTED) {
+                                    ActivityCompat.requestPermissions(this@MainActivity,
+                                        arrayOf(Manifest.permission.CALL_PHONE), PHONE_COMMAND_CALL_PHONE_PERMISSION)
+                                } else phoneCall()
+                            }
+                            CommandType.SMS.toString() -> {
+                                currentPhoneNumber = command.phoneNumber
+                                currentMessage = command.message
+                                if (ContextCompat.checkSelfPermission(this@MainActivity,
+                                        Manifest.permission.SEND_SMS)
+                                    != PackageManager.PERMISSION_GRANTED) {
+                                    ActivityCompat.requestPermissions(this@MainActivity,
+                                        arrayOf(Manifest.permission.SEND_SMS), SMS_COMMAND_SMS_PERMISSION)
+                                } else sendSms()
+                            }
+                            CommandType.URL.toString() -> {
+                                currentUrl = command.url
+                                openUrl()
+                            }
+                        }
                     }
                 } else {
-                    db.commandDao().insertAll(
-                        Command (1, id, "Appeler Titi", CommandType.PHONE.toString())
-                    )
-                    commands = db.commandDao().getAll()
                     runOnUiThread {
-                        rv_commands.adapter?.notifyDataSetChanged()
+                        displayTypeDialog(id)
                     }
                 }
+            }
+        }
+    }
+
+    private fun displayTypeDialog(nfcId: String) {
+        val dialogBuilder = AlertDialog.Builder(this@MainActivity)
+        val view = layoutInflater.inflate(R.layout.dialog_type, null)
+        dialogBuilder.setView(view)
+        dialogBuilder.setTitle(R.string.add_new_cmd)
+        dialogBuilder.setCancelable(true)
+        dialogBuilder.setNegativeButton(R.string.cancel, { dialog, _ ->  dialog.dismiss() } )
+        val dialog = dialogBuilder.create()
+        view.phone_btn.setOnClickListener {
+            dialog.dismiss()
+            displayPhoneDialog(nfcId)
+        }
+        view.sms_btn.setOnClickListener {
+            dialog.dismiss()
+            displaySmsDialog(nfcId)
+        }
+        view.url_btn.setOnClickListener {
+            dialog.dismiss()
+            displayUrlDialog(nfcId)
+        }
+        dialog.show()
+    }
+
+    private fun displayPhoneDialog(nfcId: String) {
+        val dialogBuilder = AlertDialog.Builder(this@MainActivity)
+        val view = layoutInflater.inflate(R.layout.dialog_phone, null)
+        dialogBuilder.setView(view)
+        dialogBuilder.setTitle(R.string.add_phone_cmd)
+        dialogBuilder.setCancelable(true)
+        dialogBuilder.setNegativeButton(R.string.cancel, { dialog, _ ->  dialog.dismiss() } )
+        dialogBuilder.setPositiveButton(R.string.ok) { _, _ -> saveCommand(nfcId, view.et_name.text.toString(), CommandType.PHONE, phoneNumber = view.et_phone_number.text.toString()) }
+        dialogBuilder.create().show()
+    }
+
+    private fun displaySmsDialog(nfcId: String) {
+        val dialogBuilder = AlertDialog.Builder(this@MainActivity)
+        val view = layoutInflater.inflate(R.layout.dialog_sms, null)
+        dialogBuilder.setView(view)
+        dialogBuilder.setTitle(R.string.add_sms_cmd)
+        dialogBuilder.setCancelable(true)
+        dialogBuilder.setNegativeButton(R.string.cancel, { dialog, _ ->  dialog.dismiss() } )
+        dialogBuilder.setPositiveButton(R.string.ok) { _, _ ->
+            saveCommand(nfcId, view.et_name.text.toString(), CommandType.SMS, phoneNumber = view.et_sms_number.text.toString(), message = view.et_message.text.toString())
+        }
+        dialogBuilder.create().show()
+    }
+
+    private fun displayUrlDialog(nfcId: String) {
+        val dialogBuilder = AlertDialog.Builder(this@MainActivity)
+        val view = layoutInflater.inflate(R.layout.dialog_url, null)
+        dialogBuilder.setView(view)
+        dialogBuilder.setTitle(R.string.add_url_cmd)
+        dialogBuilder.setCancelable(true)
+        dialogBuilder.setNegativeButton(R.string.cancel, { dialog, _ ->  dialog.dismiss() } )
+        dialogBuilder.setPositiveButton(R.string.ok) { _, _ -> saveCommand(nfcId, view.et_name.text.toString(), CommandType.URL, url = view.et_url.text.toString()) }
+        dialogBuilder.create().show()
+    }
+
+    private fun phoneCall() {
+        val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:" + currentPhoneNumber))
+        startActivity(intent)
+    }
+
+    private fun sendSms() {
+        val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + currentPhoneNumber))
+            .putExtra("sms_body", currentMessage)
+        startActivity(intent)
+    }
+
+
+    private fun openUrl() {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(currentUrl))
+        startActivity(intent)
+    }
+
+    @SuppressLint("WrongConstant")
+    private fun saveCommand(nfcId: String, name: String, type: CommandType, phoneNumber: String = "", message: String = "", url: String = "") {
+        launch(Dispatchers.IO) {
+            db.commandDao().insertAll(
+                Command (nfcId = nfcId, name = name, type = type.toString(), phoneNumber = phoneNumber, message = message, url = url)
+            )
+            commands = db.commandDao().getAll()
+            runOnUiThread {
+                rv_commands.adapter?.notifyDataSetChanged()
+                Toast.makeText(this@MainActivity, R.string.new_cmd_added, 8).show()
             }
         }
     }
@@ -103,57 +222,30 @@ class MainActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         return buffer.toString()
     }
 
-    fun createTextMessage(content: String): NdefMessage? {
-        try {
-            val lang = Locale.getDefault().getLanguage().toByteArray()
-            val text = content.toByteArray(charset("UTF-8")) // Content in UTF-8
-            val payload = ByteArrayOutputStream(1 + lang.size + text.size)
-            payload.write((lang.size and 0x1F))
-            payload.write(lang, 0, lang.size)
-            payload.write(text, 0, text.size)
-            val record = NdefRecord(
-                NdefRecord.TNF_WELL_KNOWN,
-                NdefRecord.RTD_TEXT, ByteArray(0),
-                payload.toByteArray()
-            )
-            return NdefMessage(arrayOf(record))
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        return null
-    }
-
-    fun writeTag(tag: Tag?, message: NdefMessage?) {
-        if (tag != null) {
-            try {
-                val ndefTag = Ndef.get(tag)
-                if (ndefTag == null) {
-                    // Let's try to format the Tag in NDEF
-                    val nForm = NdefFormatable.get(tag)
-                    if (nForm != null) {
-                        nForm.connect()
-                        nForm.format(message)
-                        nForm.close()
-                    }
-                } else {
-                    ndefTag.connect()
-                    ndefTag.writeNdefMessage(message)
-                    ndefTag.close()
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
+    override fun onRequestPermissionsResult(requestCode: Int,
+                                            permissions: Array<String>, grantResults: IntArray) {
+        when (requestCode) {
+            PHONE_COMMAND_CALL_PHONE_PERMISSION -> {
+                if ((grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)) phoneCall()
+                return
             }
-
+            SMS_COMMAND_SMS_PERMISSION -> {
+                if ((grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)) sendSms()
+                return
+            }
         }
     }
 }
 
 @Entity
 data class Command(
-    @PrimaryKey val uid: Int,
+    @PrimaryKey(autoGenerate = true) val uid: Int = 0,
     @ColumnInfo(name = "nfc_id") val nfcId: String,
     @ColumnInfo(name = "name") val name: String,
-    @ColumnInfo(name = "type") val type: String
+    @ColumnInfo(name = "type") val type: String,
+    @ColumnInfo(name = "phone_number") val phoneNumber: String = "",
+    @ColumnInfo(name = "message") val message: String = "",
+    @ColumnInfo(name = "url") val url: String = ""
 )
 
 @Dao

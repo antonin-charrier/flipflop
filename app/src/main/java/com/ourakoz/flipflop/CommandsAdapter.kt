@@ -13,11 +13,11 @@ class CommandsAdapter(val commands: List<Command>, val context: Context) : Recyc
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder?.commandName?.text = commands.elementAt(position).name
+        holder.commandName?.text = commands.elementAt(position).name
         when(commands.elementAt(position).type) {
-            CommandType.PHONE.toString() -> holder?.commandType?.setImageResource(R.drawable.phone)
-            CommandType.SMS.toString() -> holder?.commandType?.setImageResource(R.drawable.sms)
-            CommandType.URL.toString() -> holder?.commandType?.setImageResource(R.drawable.url)
+            CommandType.PHONE.toString() -> holder.commandType?.setImageResource(R.drawable.phone)
+            CommandType.SMS.toString() -> holder.commandType?.setImageResource(R.drawable.sms)
+            CommandType.URL.toString() -> holder.commandType?.setImageResource(R.drawable.url)
         }
     }
 
