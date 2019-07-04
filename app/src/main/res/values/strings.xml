@@ -2,14 +2,21 @@
     <string name="app_name">FlipFlop</string>
     <string name="phone_number">Phone number</string>
     <string name="add_phone_cmd">Add a phone command</string>
+    <string name="edit_phone_cmd">Edit phone command</string>
     <string name="message">Message</string>
     <string name="add_sms_cmd">Add an SMS command</string>
+    <string name="edit_sms_cmd">Edit SMS command</string>
     <string name="url">URL</string>
     <string name="add_url_cmd">Add a URL command</string>
+    <string name="edit_url_cmd">Edit URL command</string>
     <string name="ok">OK</string>
     <string name="cancel">Cancel</string>
+    <string name="delete">Delete</string>
+    <string name="no_cmd">You don\'t have any command yet. Scan an NFC tag to add one</string>
     <string name="cmd_name">Command name</string>
     <string name="cmd_type">What type of command do you want to add?</string>
     <string name="add_new_cmd">Add a new command</string>
-    <string name="new_cmd_added">The command has been added (yet is not displaying unless you restart the application since notfiyDataSetChanged is not working for no reason ¯\_(ツ)_/¯ )</string>
+    <string name="new_cmd_added">The command has been added (yet the list is not updated unless you restart the application since notfiyDataSetChanged is not working for no reason ¯\\_(ツ)_/¯ )</string>
+    <string name="new_cmd_updated">The command has been updated (yet the list is not updated unless you restart the application since notfiyDataSetChanged is not working for no reason ¯\\_(ツ)_/¯ )</string>
+    <string name="new_cmd_deleted">The command has been deleted (yet the list is not updated unless you restart the application since notfiyDataSetChanged is not working for no reason ¯\\_(ツ)_/¯ )</string>
 </resources>

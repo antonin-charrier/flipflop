@@ -19,6 +19,7 @@ class CommandsAdapter(val commands: List<Command>, val context: Context) : Recyc
             CommandType.SMS.toString() -> holder.commandType?.setImageResource(R.drawable.sms)
             CommandType.URL.toString() -> holder.commandType?.setImageResource(R.drawable.url)
         }
+        holder.view.setOnClickListener { (context as MainActivity).openEditionDialog(commands.elementAt(position)) }
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -29,4 +30,5 @@ class CommandsAdapter(val commands: List<Command>, val context: Context) : Recyc
 class ViewHolder (view: View) : RecyclerView.ViewHolder(view) {
     val commandName = view.command_name
     val commandType = view.command_type
+    val view = view
 }

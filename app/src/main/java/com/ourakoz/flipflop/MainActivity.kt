@@ -10,6 +10,7 @@ import android.net.Uri
 import android.nfc.NfcAdapter
 import android.nfc.Tag
 import android.os.Bundle
+import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -52,8 +53,15 @@ class MainActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         launch (Dispatchers.IO)  {
             commands = db.commandDao().getAll()
             runOnUiThread {
+                if(commands.size > 0) {
+                    tv_no_cmd.visibility = View.GONE
+                    rv_commands.visibility = View.VISIBLE
+                } else {
+                    tv_no_cmd.visibility = View.VISIBLE
+                    rv_commands.visibility = View.GONE
+                }
                 rv_commands.layoutManager = LinearLayoutManager(applicationContext)
-                rv_commands.adapter = CommandsAdapter(commands, applicationContext)
+                rv_commands.adapter = CommandsAdapter(commands, this@MainActivity)
             }
         }
 
@@ -185,21 +193,47 @@ class MainActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         dialogBuilder.create().show()
     }
 
-    private fun phoneCall() {
-        val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:" + currentPhoneNumber))
-        startActivity(intent)
+    private fun displayPhoneEditionDialog(command: Command) {
+        val dialogBuilder = AlertDialog.Builder(this@MainActivity)
+        val view = layoutInflater.inflate(R.layout.dialog_phone, null)
+        view.et_name.setText(command.name)
+        view.et_phone_number.setText(command.phoneNumber)
+        dialogBuilder.setView(view)
+        dialogBuilder.setTitle(R.string.edit_phone_cmd)
+        dialogBuilder.setCancelable(true)
+        dialogBuilder.setNeutralButton(R.string.delete, { dialog, _ ->  deleteCommand(command) } )
+        dialogBuilder.setNegativeButton(R.string.cancel, { dialog, _ ->  dialog.dismiss() } )
+        dialogBuilder.setPositiveButton(R.string.ok) { _, _ -> updateCommand(command) }
+        dialogBuilder.create().show()
     }
 
-    private fun sendSms() {
-        val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + currentPhoneNumber))
-            .putExtra("sms_body", currentMessage)
-        startActivity(intent)
+    private fun displaySmsEditionDialog(command: Command) {
+        val dialogBuilder = AlertDialog.Builder(this@MainActivity)
+        val view = layoutInflater.inflate(R.layout.dialog_sms, null)
+        view.et_name.setText(command.name)
+        view.et_sms_number.setText(command.phoneNumber)
+        view.et_message.setText(command.message)
+        dialogBuilder.setView(view)
+        dialogBuilder.setTitle(R.string.edit_sms_cmd)
+        dialogBuilder.setCancelable(true)
+        dialogBuilder.setNeutralButton(R.string.delete, { dialog, _ ->  deleteCommand(command) } )
+        dialogBuilder.setNegativeButton(R.string.cancel, { dialog, _ ->  dialog.dismiss() } )
+        dialogBuilder.setPositiveButton(R.string.ok) { _, _ -> updateCommand(command) }
+        dialogBuilder.create().show()
     }
 
-
-    private fun openUrl() {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(currentUrl))
-        startActivity(intent)
+    private fun displayUrlEditionDialog(command: Command) {
+        val dialogBuilder = AlertDialog.Builder(this@MainActivity)
+        val view = layoutInflater.inflate(R.layout.dialog_url, null)
+        view.et_name.setText(command.name)
+        view.et_url.setText(command.url)
+        dialogBuilder.setView(view)
+        dialogBuilder.setTitle(R.string.edit_url_cmd)
+        dialogBuilder.setCancelable(true)
+        dialogBuilder.setNeutralButton(R.string.delete, { dialog, _ ->  deleteCommand(command) } )
+        dialogBuilder.setNegativeButton(R.string.cancel, { dialog, _ ->  dialog.dismiss() } )
+        dialogBuilder.setPositiveButton(R.string.ok) { _, _ -> updateCommand(command) }
+        dialogBuilder.create().show()
     }
 
     @SuppressLint("WrongConstant")
@@ -214,6 +248,52 @@ class MainActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                 Toast.makeText(this@MainActivity, R.string.new_cmd_added, 8).show()
             }
         }
+    }
+
+    @SuppressLint("WrongConstant")
+    private fun updateCommand(command: Command) {
+        launch(Dispatchers.IO) {
+            db.commandDao().update(command)
+            runOnUiThread {
+                rv_commands.adapter?.notifyDataSetChanged()
+                Toast.makeText(this@MainActivity, R.string.new_cmd_updated, 8).show()
+            }
+        }
+    }
+
+    @SuppressLint("WrongConstant")
+    private fun deleteCommand(command: Command) {
+        launch(Dispatchers.IO) {
+            db.commandDao().delete(command)
+            runOnUiThread {
+                rv_commands.adapter?.notifyDataSetChanged()
+                Toast.makeText(this@MainActivity, R.string.new_cmd_deleted, 8).show()
+            }
+        }
+    }
+
+    fun openEditionDialog(command: Command) {
+        when (command.type) {
+            CommandType.PHONE.toString() -> displayPhoneEditionDialog(command)
+            CommandType.SMS.toString() -> displaySmsEditionDialog(command)
+            CommandType.URL.toString() -> displayUrlEditionDialog(command)
+        }
+    }
+
+    private fun phoneCall() {
+        val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:" + currentPhoneNumber))
+        startActivity(intent)
+    }
+
+    private fun sendSms() {
+        val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + currentPhoneNumber))
+            .putExtra("sms_body", currentMessage)
+        startActivity(intent)
+    }
+
+    private fun openUrl() {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(currentUrl))
+        startActivity(intent)
     }
 
     private fun ByteArray.toHexString(): String {
@@ -259,14 +339,14 @@ interface CommandDao {
     @Query("SELECT * FROM command WHERE nfc_id LIKE :nfcId LIMIT 1")
     fun findByNfcId(nfcId: String): Command
 
+    @Update
+    fun update(command: Command)
+
     @Insert
     fun insertAll(vararg commands: Command)
 
     @Delete
     fun delete(command: Command)
-
-    @Query("DELETE FROM command")
-    fun nukeTable()
 }
 
 @Database(entities = arrayOf(Command::class), version = 1)
